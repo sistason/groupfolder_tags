@@ -21,7 +21,7 @@
 		<database>pgsql</database>
 		<database>sqlite</database>
 		<database>mysql</database>
-		<nextcloud min-version="32" max-version="32"/>
+		<nextcloud min-version="32" max-version="33"/>
 	</dependencies>
 	<commands>
 		<command>OCA\GroupfolderTags\Command\SetTag</command>
