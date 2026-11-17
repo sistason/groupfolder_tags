@@ -18,7 +18,7 @@ use OCA\GroupfolderTags\ResponseDefinitions;
 /**
  * @psalm-import-type GroupfolderTagsTag from ResponseDefinitions
  */
-class APIController extends OCSController {
+class TagController extends OCSController {
 
     public function __construct(
         string $appName,

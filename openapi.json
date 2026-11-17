@@ -74,11 +74,11 @@
     "paths": {
         "/ocs/v2.php/apps/groupfolder_tags/api/v1/tags": {
             "get": {
-                "operationId": "api-index",
+                "operationId": "tag-index",
                 "summary": "Get all tags optionally filtered by tagKey, tagValue and groupFolderId",
                 "description": "This endpoint requires admin access",
                 "tags": [
-                    "api"
+                    "tag"
                 ],
                 "security": [
                     {
@@ -234,11 +234,11 @@
         },
         "/ocs/v2.php/apps/groupfolder_tags/api/v1/tags/{groupFolderId}/{tagKey}": {
             "get": {
-                "operationId": "api-show",
+                "operationId": "tag-show",
                 "summary": "Get a specific tag by groupfolder id and tag key",
                 "description": "This endpoint requires admin access",
                 "tags": [
-                    "api"
+                    "tag"
                 ],
                 "security": [
                     {
@@ -453,11 +453,11 @@
                 }
             },
             "put": {
-                "operationId": "api-update",
+                "operationId": "tag-update",
                 "summary": "Create a new tag or update an existing tag for the specified groupfolder with the given value Endpoint is idempotent",
                 "description": "This endpoint requires admin access",
                 "tags": [
-                    "api"
+                    "tag"
                 ],
                 "security": [
                     {
@@ -690,11 +690,11 @@
                 }
             },
             "delete": {
-                "operationId": "api-destroy",
+                "operationId": "tag-destroy",
                 "summary": "Remove the given tag",
                 "description": "This endpoint requires admin access",
                 "tags": [
-                    "api"
+                    "tag"
                 ],
                 "security": [
                     {
