@@ -13,9 +13,21 @@
             "OCA\\GroupfolderTags\\": "lib/"
         }
     },
-    "require": {},
     "config": {
         "optimize-autoloader": true,
-        "autoloader-suffix": "GroupfolderTags"
-	}
+        "autoloader-suffix": "GroupfolderTags",
+        "allow-plugins": {
+            "bamarni/composer-bin-plugin": true
+        }
+	},
+    "extra": {
+        "bamarni-bin": {
+            "bin-links": false,
+            "target-directory": "vendor-bin",
+            "forward-command": true
+        }
+    },
+    "require-dev": {
+        "bamarni/composer-bin-plugin": "^1.9"
+    }
 }
