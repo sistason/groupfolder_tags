@@ -3,11 +3,12 @@
 namespace OCA\GroupfolderTags\Db;
 
 use OCP\AppFramework\Db\DoesNotExistException;
-use OCP\AppFramework\Db\Entity;
+use OCP\AppFramework\Db\MultipleObjectsReturnedException;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\Exception;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
+
 
 class TagMapper extends QBMapper {
 	public const TABLENAME = 'groupfolder_tags';
@@ -20,13 +21,16 @@ class TagMapper extends QBMapper {
 	/**
 	 * @param int $groupFolderId
 	 * @param string $tagKey
-	 * @return Entity|Tag
-	 * @throws \OCP\AppFramework\Db\MultipleObjectsReturnedException
+	 * 
+	 * @return Tag
+	 * 
 	 * @throws DoesNotExistException
+	 * @throws MultipleObjectsReturnedException
 	 */
 	public function find(int $groupFolderId, string $tagKey): Tag {
 		/* @var $qb IQueryBuilder */
 		$qb = $this->db->getQueryBuilder();
+
 		$qb->select('*')
 			->from(self::TABLENAME)
 			->where($qb->expr()->eq('group_folder_id', $qb->createNamedParameter($groupFolderId, IQueryBuilder::PARAM_INT)))
@@ -38,13 +42,16 @@ class TagMapper extends QBMapper {
 	/**
 	 * @param int $groupFolderId
 	 * @param string $tagKey
-	 * @return Entity|Tag
-	 * @throws \OCP\AppFramework\Db\MultipleObjectsReturnedException
+	 * 
+	 * @return array
+	 * 
 	 * @throws DoesNotExistException
+	 * @throws MultipleObjectsReturnedException
 	 */
 	public function findIncludingGroupfolder(int $groupFolderId, string $tagKey): array {
 		/* @var $qb IQueryBuilder */
 		$qb = $this->db->getQueryBuilder();
+
 		$qb->select('*')
 			->from(self::TABLENAME, "t")
 			->where($qb->expr()->eq('group_folder_id', $qb->createNamedParameter($groupFolderId, IQueryBuilder::PARAM_INT)))
@@ -57,13 +64,46 @@ class TagMapper extends QBMapper {
 	}
 
 	/**
-	 * @param string $tagKey
-	 * @param string|null $tagValue
-	 * @return array
+	 * @param array{tagKey: ?string, tagValue: ?string, groupFolderId: ?int} $filters
+	 * 
+	 * @return list<Tag>
 	 */
-	public function findAll(string $tagKey, ?string $tagValue): array {
+	public function findAll(array $filters): array {
 		/* @var $qb IQueryBuilder */
 		$qb = $this->db->getQueryBuilder();
+
+		$qb->select('*')
+			->from(self::TABLENAME);
+
+		$dbFilters = $qb->expr()->andX();
+
+		if(isset($filters["tagKey"])) {
+			$dbFilters->add($qb->expr()->eq('tag_key', $qb->createNamedParameter($filters["tagKey"])));
+		}
+
+		if(isset($filters["tagValue"])) {
+			$dbFilters->add($qb->expr()->eq('tag_value', $qb->createNamedParameter($filters["tagValue"])));
+		}
+
+		if(isset($filters["groupFolderId"])) {
+			$dbFilters->add($qb->expr()->eq('group_folder_id', $qb->createNamedParameter($filters["groupFolderId"], IQueryBuilder::PARAM_INT)));
+		}
+
+		$qb->where($dbFilters);
+
+		return $this->findEntities($qb);
+	}
+
+	/**
+	 * @param string $tagKey
+	 * @param ?string $tagValue
+	 * 
+	 * @return list<Tag>
+	 */
+	public function findAllWithTagKey(string $tagKey, ?string $tagValue): array {
+		/* @var $qb IQueryBuilder */
+		$qb = $this->db->getQueryBuilder();
+
 		$qb->select('*')
 			->from(self::TABLENAME)
 			->where($qb->expr()->eq('tag_key', $qb->createNamedParameter($tagKey)));
@@ -77,12 +117,14 @@ class TagMapper extends QBMapper {
 
 	/**
 	 * @param string $tagKey
-	 * @param string|null $tagValue
-	 * @return array
+	 * @param ?string $tagValue
+	 * 
+	 * @return list<array>
 	 */
 	public function findAllIncludingGroupfolder(string $tagKey, ?string $tagValue = null): array {
 		/* @var $qb IQueryBuilder */
 		$qb = $this->db->getQueryBuilder();
+
 		$qb->select('*')
 			->from(self::TABLENAME, alias: "t")
 			->where($qb->expr()->eq('tag_key', $qb->createNamedParameter($tagKey)));
@@ -99,13 +141,15 @@ class TagMapper extends QBMapper {
 	}
 
 	/**
-	 * @param array $filters
-	 * @param array|null $additionalReturnTags
-	 * @return array
+	 * @param list<array{key: string, value: ?string, includeInOutput: ?bool}> $filters
+	 * @param ?string[] $additionalReturnTags array of additional tags to return
+	 * 
+	 * @return IQueryBuilder
 	 */
 	private function findGroupfoldersWithTagsQueryBuilder(array $filters, array $additionalReturnTags = []): IQueryBuilder {
 		/* @var $qb IQueryBuilder */
 		$qb = $this->db->getQueryBuilder();
+
 		$qb->select('g.mount_point', 'g.quota', 'g.acl', 'g.root_id', 'g.storage_id', 'g.options')
 			->selectAlias('g.folder_id', 'id')
 			->from(self::GROUP_FOLDERS_TABLENAME, alias: "g");
@@ -116,6 +160,12 @@ class TagMapper extends QBMapper {
 		return $qb;
 	}
 
+	/**
+	 * @param IQueryBuilder $qb
+	 * @param list<array{key: string, value: ?string, includeInOutput: ?bool}> $filters
+	 * 
+	 * @return void
+	 */
 	private function filterGroupfolderQuery(IQueryBuilder $qb, array $filters): void {
 		$index = 0;
 		foreach($filters as $filter) {
@@ -139,6 +189,12 @@ class TagMapper extends QBMapper {
 		}
 	}
 
+	/**
+	 * @param IQueryBuilder $qb
+	 * @param string[] $additionalReturnTags
+	 * 
+	 * @return void
+	 */
 	private function addAdditionalReturnTagsToGroupfolderQuery(IQueryBuilder $qb, array $additionalReturnTags): void {
 		$index = 0;
 		foreach($additionalReturnTags as $additionalReturnTag) {
@@ -157,17 +213,18 @@ class TagMapper extends QBMapper {
 
 	/**
 	 * Get a single groupfolder by id, only if all filters match it
-	 * filter format: indexed array of asociative arrays with attributes: key, value, includeInOutput
 	 * Returns array with groupfolder attributes (id, mount_point, quota, acl, root_id, storage_id, options) and the values of additionalreturntags and filters with includeInOutput === true
 	 * 
-	 * @param int $groupfolderId
-	 * @param array $filters
-	 * @param array|null $additionalReturnTags
+	 * @param int $groupFolderId
+	 * @param list<array{key: string, value: ?string, includeInOutput: ?bool}> $filters
+	 * @param ?string[] $additionalReturnTags array of additional tags to return
+	 * 
 	 * @return array
 	 */
 	public function findGroupfolderWithTags(int $groupFolderId, array $filters, array $additionalReturnTags = []): array {
 		/* @var $qb IQueryBuilder */
 		$qb = $this->db->getQueryBuilder();
+
 		$qb->select('g.mount_point', 'g.quota', 'g.acl', 'g.root_id', 'g.storage_id', 'g.options')
 			->selectAlias('g.folder_id', 'id')
 			->from(self::GROUP_FOLDERS_TABLENAME, alias: "g")
@@ -180,8 +237,9 @@ class TagMapper extends QBMapper {
 	}
 
 	/**
-	 * @param array $filters [key: string, (value: string), (includeInOutput: bool)] filter pairs, result is only included if 
-	 * @param array|null $additionalReturnTags array of tags to return (if set, otherwise NULL)
+	 * @param list<array{key: string, value: ?string, includeInOutput: ?bool}> $filters
+	 * @param ?string[] $additionalReturnTags array of additional tags to return
+	 * 
 	 * @return array
 	 */
 	public function findGroupfoldersWithTags(array $filters, array $additionalReturnTags = []): array {
@@ -189,9 +247,10 @@ class TagMapper extends QBMapper {
 	}
 
 	/**
-	 * @param array $filters [key: string, (value: string), (includeInOutput: bool)] filter pairs, result is only included if 
-	 * @param array|null $additionalReturnTags array of tags to return (if set, otherwise NULL)
-	 * @return array
+	 * @param list<array{key: string, value: ?string, includeInOutput: ?bool}> $filters
+	 * @param array|null $additionalReturnTags array of additional tags to return
+	 * 
+	 * @return \Generator<int, array, mixed, void>
 	 */
 	public function findGroupfoldersWithTagsGenerator(array $filters, array $additionalReturnTags = []): \Generator {
 		$result = $this->findGroupfoldersWithTagsQueryBuilder($filters, $additionalReturnTags)->executeQuery();
@@ -207,10 +266,12 @@ class TagMapper extends QBMapper {
 
 	/**
 	 * @return Tag[]
+	 * 
 	 * @throws Exception
 	 */
 	public function findByGroupFolderAndKey(string $groupFolderId, ?string $tagKey): array {
 		$qb = $this->db->getQueryBuilder();
+
 		$qb->select('*')
 			->from(self::TABLENAME)
 			->where($qb->expr()->eq('group_folder_id', $qb->createNamedParameter($groupFolderId, IQueryBuilder::PARAM_INT)));
@@ -223,10 +284,13 @@ class TagMapper extends QBMapper {
 	}
 
 	/**
+	 * @return int[]
+	 * 
 	 * @throws Exception
 	 */
 	public function findGroupfoldersWithTag(string $tagKey, ?string $tagValue): array {
 		$qb = $this->db->getQueryBuilder();
+
 		$qb->selectDistinct('group_folder_id')
 			->from(self::TABLENAME)
 			->where($qb->expr()->eq('tag_key', $qb->createNamedParameter($tagKey)));

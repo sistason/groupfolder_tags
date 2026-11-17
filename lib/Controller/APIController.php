@@ -1,17 +1,23 @@
 <?php
-namespace OCA\GroupFolderTags\Controller;
+
+declare(strict_types=1);
+
+namespace OCA\GroupfolderTags\Controller;
 
 use OCP\AppFramework\OCSController;
 use OCP\AppFramework\Http\DataResponse;
+use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\IRequest;
 
 use OCA\GroupFolders\Folder\FolderManager;
 use OCA\GroupfolderTags\Errors\TagNotFound;
 use OCA\GroupfolderTags\Service\TagService;
-use OCA\GroupfolderTags\Db\TagMapper;
+use OCA\GroupfolderTags\ResponseDefinitions;
 
-
+/**
+ * @psalm-import-type GroupfolderTagsTag from ResponseDefinitions
+ */
 class APIController extends OCSController {
 
     public function __construct(
@@ -19,99 +25,107 @@ class APIController extends OCSController {
         IRequest $request,
         protected readonly FolderManager $folderManager,
         protected readonly TagService $service,
-        protected readonly TagMapper $mapper
     ) {
         parent::__construct($appName, $request);
     }
 
     /**
-     * Get all groupfolders with the specific tagKey.
+     * Get all tags optionally filtered by tagKey, tagValue and groupFolderId
      *
-     * @param string tagKey The tagKey to search for
-     * @param string|null tagValue Optional search for only tagKey with that value
-     * @return DataResponse<Http::STATUS_OK, array{groupfolders: array}>
+     * @param ?string $tagKey filter results to tags with this key
+     * @param ?string $tagValue filter results to tags with this value
+     * @param ?int $groupFolderId filter results to tags attached to this groupfolder
+     * 
+     * @return DataResponse<Http::STATUS_OK, array{tags: list<GroupfolderTagsTag>}, array{}>
      *
-     * 200: returns 0 or many matching tags
-     * 400: missing mandatory tagKey parameter
+     * 200: 0 or multiple matching tags returned
      */
-    #[ApiRoute(verb: 'GET', url: '/api/v1/groupfolders/{tagKey}')]
-    public function findAllWithTagKey(string $tagKey, ?string $tagValue = null): DataResponse {
-        if (is_null($tagKey) || $tagKey === "") {
-            return new DataResponse(['error' => 'No tag key provided'], 400);
-        }
+    #[ApiRoute(verb: 'GET', url: '/api/v1/tags')]
+    public function index(?string $tagKey = null, ?string $tagValue = null, ?int $groupFolderId = null): DataResponse {
+        $tags = $this->service->findAll(["tagKey" => $tagKey, "tagValue" => $tagValue, "groupFolderId" => $groupFolderId]);
 
-        $tags = $this->mapper->findAll($tagKey, $tagValue);
-        return new DataResponse(['tags' => $tags], 200);
+        return new DataResponse(['tags' => $tags], Http::STATUS_OK);
     }
 
     /**
-     * Get all tags of the groupfolder with the specified id
+     * Get a specific tag by groupfolder id and tag key
      *
-     * @param int groupFolderId The id of the groupfolder to search for
-     * @param string|null tagKey Optional return only the tag with the specified tagKey
-     * @return DataResponse<Http::STATUS_OK, array{tags: Tag[]}>
+     * @param int $groupFolderId The id of the groupfolder to get tag of
+     * @param string $tagKey The key of the tag
+     * 
+     * @return DataResponse<Http::STATUS_OK, array{tag: GroupfolderTagsTag}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_NOT_FOUND, array{error: string}, array{}>
      *
-     * 200: returns 0 or many matching tags
-     * 400: invalid tag, when looking for a specific tagKey
+     * 200: 1 tag returned
+     * 400: missing or invalid mandatory tagKey parameter
+     * 404: tag does not exist
      */
-    #[ApiRoute(verb: 'GET', url: '/api/v1/groupfolder/{groupFolderId}')]
-    public function getGroupfolderTag(int $groupFolderId, ?string $tagKey = null): DataResponse {
+    #[ApiRoute(verb: 'GET', url: '/api/v1/tags/{groupFolderId}/{tagKey}')]
+    public function show(int $groupFolderId, string $tagKey): DataResponse {
+        if ($tagKey === "") {
+            return new DataResponse(['error' => 'No tag key provided'], Http::STATUS_BAD_REQUEST);
+        }
+
         try {
-            $tags = $this->service->findByGroupFolderAndKey($groupFolderId, $tagKey);
-            return new DataResponse(['tags' => $tags], 200);
+            $tag = $this->service->find($groupFolderId, $tagKey);
+
+            return new DataResponse(['tag' => $tag], Http::STATUS_OK);
         } catch (TagNotFound $e) {
-            return new DataResponse(['error' => "Tag {$tagKey} not found!"], 400);
+            return new DataResponse(['error' => "Tag {$tagKey} not found!"], Http::STATUS_NOT_FOUND);
         }
     }
 
     /**
-     * set the tagKey of the specified groupfolder to tagValue
+     * Create a new tag or update an existing tag for the specified groupfolder with the given value
+     * Endpoint is idempotent
      *
-     * @param int groupFolderId The id of the groupfolder to set the tag
-     * @param string tagKey The key to set
-     * @param string tagValue The value to set
-     * @return DataResponse<Http::STATUS_OK, array{tag: Tag}>
+     * @param int $groupFolderId The id of the groupfolder to create/update the tag of
+     * @param string $tagKey The key to set
+     * @param ?string $tagValue The optional value to set; omit/set to null to create tag without value or remove value of existing tag
+     * 
+     * @return DataResponse<Http::STATUS_OK, array{tag: GroupfolderTagsTag}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_NOT_FOUND, array{error: string}, array{}>
      *
-     * 200: a tag key
-     * 400: missing tagKey or tagValue parameter
-     * 404: groupfolder with groupFolderId does not exist
+     * 200: created/updated tag
+     * 400: missing or invalid mandatory tagKey parameter
+     * 404: groupfolder with given groupFolderId does not exist
      */
-    #[ApiRoute(verb: 'POST', url: '/api/v1/groupfolder/{groupFolderId}/{tagKey}')]
-    public function setGroupfolderTag(int $groupFolderId, string $tagKey, string $tagValue): DataResponse {
-        if (is_null($tagKey) || $tagKey === "") {
-            return new DataResponse(['error' => 'No tag key provided!'], 400);
-        }
-        if (is_null($tagValue) || $tagValue === "") {
-            return new DataResponse(['error' => 'No tag value provided!'], 400);
+    #[ApiRoute(verb: 'PUT', url: '/api/v1/tags/{groupFolderId}/{tagKey}')]
+    public function update(int $groupFolderId, string $tagKey, ?string $tagValue = null): DataResponse {
+        if ($tagKey === "") {
+            return new DataResponse(['error' => 'No tag key provided!'], Http::STATUS_BAD_REQUEST);
         }
 
         $folder = $this->folderManager->getFolder($groupFolderId);
 		if ($folder === null) {
-		    return new DataResponse(['error' => 'Groupfolder does not exist!'], 404);
+		    return new DataResponse(['error' => 'Groupfolder does not exist!'], Http::STATUS_NOT_FOUND);
         }
 
         $tag = $this->service->update($groupFolderId, $tagKey, $tagValue);
-        return new DataResponse(['tag' => $tag], 200);
+        return new DataResponse(['tag' => $tag], Http::STATUS_OK);
     }
 
     /**
-     * remove the tagKey of the specified groupfolder
+     * Remove the given tag
      *
-     * @param int groupFolderId The id of the groupfolder to remove the tag from
-     * @param string tagKey The key to remove
-     * @return DataResponse<Http::STATUS_OK, array{tag: Tag}>
+     * @param int $groupFolderId The id of the groupfolder to remove the tag from
+     * @param string $tagKey The key to remove
+     * 
+     * @return DataResponse<Http::STATUS_OK, array{tag: GroupfolderTagsTag}, array{}>|DataResponse<Http::STATUS_BAD_REQUEST|Http::STATUS_NOT_FOUND, array{error: string}, array{}>
+     * 
+     * 200: removed tag
+     * 400: missing or invalid mandatory tagKey parameter
+     * 404: tag does not exist
      */
-    #[ApiRoute(verb: 'DELETE', url: '/api/v1/groupfolder/{groupFolderId}/{tagKey}')]
-    public function removeGroupfolderTag(int $groupFolderId, string $tagKey): DataResponse {
-        if (is_null($tagKey) || $tagKey === "") {
-            return new DataResponse(['error' => 'no tag key provided'], 400);
+    #[ApiRoute(verb: 'DELETE', url: '/api/v1/tags/{groupFolderId}/{tagKey}')]
+    public function destroy(int $groupFolderId, string $tagKey): DataResponse {
+        if ($tagKey === "") {
+            return new DataResponse(['error' => 'no tag key provided'], Http::STATUS_BAD_REQUEST);
         }
 
         try {
-            $tag = $this->service->delete((int)$groupFolderId, $tagKey);
-            return new DataResponse(['tag' => $tag], 200);
+            $tag = $this->service->delete($groupFolderId, $tagKey);
+            return new DataResponse(['tag' => $tag], Http::STATUS_OK);
         } catch (TagNotFound $e) {
-            return new DataResponse(['error' => "Tag {$tagKey} not found!"], 400);
+            return new DataResponse(['error' => "Tag {$tagKey} not found!"], Http::STATUS_NOT_FOUND);
         }
     }
 }

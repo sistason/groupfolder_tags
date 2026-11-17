@@ -18,10 +18,31 @@ class TagService {
 	) {
 	}
 
-	public function findAllWithTagKey(string $tagKey, ?string $tagValue): array {
-		return $this->mapper->findAll($tagKey, $tagValue);
+	/**
+	 * @param array{tagKey: ?string, tagValue: ?string, groupFolderId: ?int} $filters
+	 * 
+	 * @return list<Tag>
+	 */
+	public function findAll(array $filters): array {
+		return $this->mapper->findAll($filters);
 	}
 
+	/**
+	 * @param string $tagKey
+	 * @param ?string $tagValue
+	 * 
+	 * @return list<Tag>
+	 */
+	public function findAllWithTagKey(string $tagKey, ?string $tagValue): array {
+		return $this->mapper->findAllWithTagKey($tagKey, $tagValue);
+	}
+
+    /**
+	 * @param string $tagKey
+	 * @param ?string $tagValue
+	 * 
+	 * @return list<array>
+	 */
 	public function findAllIncludingGroupfolder(string $tagKey, ?string $tagValue = null): array {
 		return $this->mapper->findAllIncludingGroupfolder($tagKey, $tagValue);
 	}
@@ -43,6 +64,14 @@ class TagService {
 		}
 	}
 
+    /**
+     * @param int $groupFolderId
+     * @param string $tagKey
+     * 
+     * @return Tag
+     * 
+     * @throws TagNotFound
+     */
 	public function find(int $groupFolderId, string $tagKey): Tag {
 		try {
 			return $this->mapper->find($groupFolderId, $tagKey);
