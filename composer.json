@@ -29,5 +29,8 @@
     },
     "require-dev": {
         "bamarni/composer-bin-plugin": "^1.9"
+    },
+    "scripts": {
+        "openapi": "generate-spec"
     }
 }
